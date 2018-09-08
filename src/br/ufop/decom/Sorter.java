@@ -1,6 +1,11 @@
 package br.ufop.decom;
 
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
 import java.util.SortedMap;
+import java.util.TimeZone;
 import java.util.TreeMap;
 
 /**
@@ -21,22 +26,37 @@ public class Sorter {
      * @return the generated numbers sorted in a ordered map where the keys are the
      *         generated number and the value is the frequency of this number
      */
-    public static SortedMap<Integer, Long> sort(int amount, int lowerBound, int upperBound) {
+    public static SortedMap<Long, Long> sort(long amount, int lowerBound, int upperBound) {
+        System.out.println("\nStarting local sorting!");
+        System.out.println(String.format(Locale.US, "Sorting %,d integers in [%d, %,d) range...", amount, lowerBound, upperBound));
 
         // A map with sorted keys
-        SortedMap<Integer, Long> sortedNumbers = new TreeMap<>();
+        SortedMap<Long, Long> sortedNumbers = new TreeMap<>();
 
-        for (int i = 0; i < amount; i++) {
-            final int randomNumber = (int) (Math.random() * upperBound);
+        long startTime = System.currentTimeMillis();
+
+        for (long i = 0l; i < amount; i++) {
+            final long randomNumber = (long) (lowerBound + (Math.random() * (upperBound - lowerBound)));
 
             // The frequency of the generated random number in numbers map
             Long randomNumberFrequency = null;
 
             if ((randomNumberFrequency = sortedNumbers.get(randomNumber)) != null)
-                sortedNumbers.put(randomNumber, randomNumberFrequency + 1);
+                sortedNumbers.put(randomNumber, randomNumberFrequency + 1l);
             else
                 sortedNumbers.put(randomNumber, 1l);
         }
+
+        long endTime = System.currentTimeMillis();
+        long deltaTime = endTime - startTime;
+
+        Date date = new Date(deltaTime);
+        DateFormat formatter = new SimpleDateFormat("HH:mm:ss.SSS");
+        formatter.setTimeZone(TimeZone.getTimeZone("UTC"));
+        System.out.println(String.format("The sorting was terminated! Total time: %s\n", formatter.format(date)));
+
+        Runtime.getRuntime().gc();
+        Runtime.getRuntime().freeMemory();
 
         return sortedNumbers;
     }

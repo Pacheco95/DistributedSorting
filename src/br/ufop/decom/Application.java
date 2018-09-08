@@ -10,7 +10,7 @@ import java.util.TimeZone;
 import java.util.TreeMap;
 import java.util.concurrent.Future;
 
-import implementations.sm_kernel.JCL_FacadeImpl;
+import implementations.dm_kernel.user.JCL_FacadeImpl;
 import interfaces.kernel.JCL_facade;
 import interfaces.kernel.JCL_result;
 
@@ -27,55 +27,65 @@ import interfaces.kernel.JCL_result;
  */
 public class Application {
 
+    @SuppressWarnings("unchecked")
     public static void main(String[] args) {
+        
+        final long INTEGERS_IN_1TB = 274877906944l;
+        
         JCL_facade jcl = JCL_FacadeImpl.getInstance();
 
         Application.register(Sorter.class);
 
         Object[] sortArguments = {
                 // Number of generated random numbers
-                (int) 1e7,
+                INTEGERS_IN_1TB,
 
                 // Lower bound (included)
                 0,
 
                 // Upper bound (excluded)
-                10 };
+                (int) 1e3 };
 
         // For all hosts generate random numbers and sort them
         // But before we will start a timer.
+        System.out.println("\nStarting cluster sort...");
         long startTime = System.currentTimeMillis();
-        List<Future<JCL_result>> executeAll = jcl.executeAllCores(Sorter.class.getSimpleName(), "sort", sortArguments);
+        List<Future<JCL_result>> executeAll = jcl.executeAll(Sorter.class.getSimpleName(), "sort", sortArguments);
         // Wait for all hosts end sorting
         List<JCL_result> results = jcl.getAllResultBlocking(executeAll);
         long endTime = System.currentTimeMillis();
         long deltaTime = endTime - startTime;
-        System.out.println();
+        Application.printElapsedTime(deltaTime, "finished!");
 
-        Date date = new Date(deltaTime);
-        DateFormat formatter = new SimpleDateFormat("HH:mm:ss.SSS");
-        formatter.setTimeZone(TimeZone.getTimeZone("UTC"));
-        System.out.println(String.format("The sorting was terminated! Total time: %s\n", formatter.format(date)));
+        System.out.println("Merging maps...");
 
         // Store the sorted collections returned by all hosts
         final int numberOfHosts = jcl.getDevices().size();
-
-        ArrayList<SortedMap<Integer, Long>> retrievedSortedMaps = new ArrayList<>(numberOfHosts);
-
+        ArrayList<SortedMap<Long, Long>> retrievedSortedMaps = new ArrayList<>(numberOfHosts);
+        startTime = System.currentTimeMillis();
         // Retrieve returned maps and check for errors
-        for (JCL_result jcl_result : results) {
-            if (jcl_result.getCorrectResult() == null)
+        for (JCL_result jcl_result : results)
+            try {
+                retrievedSortedMaps.add((SortedMap<Long, Long>) jcl_result.getCorrectResult());
+            } catch (ClassCastException e) {
                 jcl_result.getErrorResult().printStackTrace();
-
-            @SuppressWarnings("unchecked")
-            SortedMap<Integer, Long> sortedMap = (SortedMap<Integer, Long>) jcl_result.getCorrectResult();
-
-            retrievedSortedMaps.add(sortedMap);
-        }
+            }
 
         Application.mergeAll(retrievedSortedMaps);
-
+        
+        endTime = System.currentTimeMillis();
+        deltaTime = endTime - startTime;
+        
+        Application.printElapsedTime(deltaTime, "finished!");
+        
         Application.cleanupJCLandQuit(jcl, null, 0);
+    }
+    
+    private static void printElapsedTime (long deltaTime, String message) {
+        Date date = new Date(deltaTime);
+        DateFormat formatter = new SimpleDateFormat("HH:mm:ss.SSS");
+        formatter.setTimeZone(TimeZone.getTimeZone("UTC"));
+        System.out.println(String.format("%s\nTotal time: %s\n", message, formatter.format(date)));
     }
 
     @SuppressWarnings("unused")
@@ -108,10 +118,10 @@ public class Application {
         System.exit(returnCode);
     }
 
-    private static SortedMap<Integer, Long> mergeAll(ArrayList<SortedMap<Integer, Long>> sortedMaps) {
-        SortedMap<Integer, Long> finalMap = new TreeMap<>();
+    private static SortedMap<Long, Long> mergeAll(ArrayList<SortedMap<Long, Long>> retrievedSortedMaps) {
+        SortedMap<Long, Long> finalMap = new TreeMap<>();
 
-        for (SortedMap<Integer, Long> sortedMap : sortedMaps) {
+        for (SortedMap<Long, Long> sortedMap : retrievedSortedMaps) {
             sortedMap.forEach((number, frequency) -> {
                 if (finalMap.containsKey(number))
                     finalMap.put(number, finalMap.get(number) + frequency);
